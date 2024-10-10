@@ -3,3 +3,10 @@
 /data/run_nonIID_fl_protein_4/
 /data/run_nonIID_fl_protein_8/
 /__pycache__/
+output_nonIID_fl_protein_2
+output_nonIID_fl_protein_4
+output_nonIID_fl_protein_8
+
+results_with_2_clients
+results_with_4_clients
+results_with_8_clients
