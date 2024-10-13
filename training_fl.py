@@ -1,4 +1,3 @@
-
 import argparse
 import time
 from collections import OrderedDict
@@ -7,18 +6,21 @@ import os
 import flwr as fl
 import torch.nn.functional as F
 import torch_geometric.loader.dataloader
+from tqdm import tqdm  # For progress bar
 
 from numpy import ndarray
 
 import common
 from utils import *
+import crypten  # Import CrypTen for MPC
+import crypten.nn as cnn  # Use CrypTen's neural networks
 
 BATCH_SIZE, TEST_BATCH_SIZE = 512, 512
 LR = 0.0001
 LOG_INTERVAL = 20
 
-# Step 1: Add More Debugging
-print("Starting FedDTIClient initialization...")
+# Step 1: Initialize CrypTen
+crypten.init_thread(0, 2)
 
 # Define Flower client
 class FedDTIClient(fl.client.NumPyClient):
@@ -36,21 +38,38 @@ class FedDTIClient(fl.client.NumPyClient):
         print("Client initialization complete!")  # Debugging step
 
     def fit(self, parameters, config):
-        self.set_parameters(parameters)
-        print('Training on {} samples...'.format(len(self.train_loader.dataset)))  # Debugging step
-        self.model.train()
-        epoch = -1
-        for batch_idx, data in enumerate(self.train_loader):
-            data, target = data.to(self.device, non_blocking=True), data.y.view(-1, 1).float().to(self.device, non_blocking=True)
+        round_num = config.get("round", 0)  # Get the current round number from config
+        print(f"Client {self.id} starting round {round_num}")  # Log the round information
 
-            self.optimizer.zero_grad()
-            loss = F.mse_loss(self.model(data), target)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            self.optimizer.step()
+        self.set_parameters(parameters)
+        print(f'Training on {len(self.train_loader.dataset)} samples...')  # Debugging step
+        self.model.train()
+
+        # Start timing the training process
+        start_time = time.time()
+
+        # Encrypt the model for MPC
+        crypten_model = cnn.from_pytorch(self.model, dummy_input=torch.empty((1, 10))).encrypt()
+
+        # Use tqdm for a progress bar in the training loop
+        for batch_idx, data in enumerate(tqdm(self.train_loader, desc=f"Client {self.id} Training", unit="batch")):
+            data.x = crypten.cryptensor(data.x)  # Encrypt input data
+            data.y = crypten.cryptensor(data.y.view(-1, 1).float())  # Encrypt target data
+
+            crypten_model.zero_grad()
+            output = crypten_model(data.x)
+            loss = crypten.mse_loss(output, data.y)  # Compute encrypted MSE loss
+            loss.backward()  # Backpropagate on encrypted data
+            crypten_model.update_gradients(self.optimizer)  # Update gradients securely
+
             if batch_idx % LOG_INTERVAL == 0:
-                print(f'Train epoch: {epoch} [{batch_idx}/{len(self.train_loader)} ({100. * batch_idx / len(self.train_loader):.0f}%)]\tLoss: {loss.item():.6f}')
-        print("Training complete!")  # Debugging step
+                print(f'Train batch: {batch_idx} Loss: {loss.get_plain_text().item():.6f}')  # Decrypt loss to print it
+
+        # End timing the training process
+        end_time = time.time()
+        total_time = end_time - start_time
+        print(f"Training complete! Time taken for training: {total_time:.2f} seconds.")  # Debugging step
+
         return self.get_parameters(), len(self.train_loader.dataset), {}
 
     def get_parameters(self, **kwargs) -> List[ndarray]:
@@ -63,17 +82,34 @@ class FedDTIClient(fl.client.NumPyClient):
         self.model.load_state_dict(state_dict, strict=True)
 
     def evaluate(self, parameters, config):
+        round_num = config.get("round", 0)  # Get the current round number from config
+        print(f"Client {self.id} starting evaluation for round {round_num}")  # Log the round information
+
         self.set_parameters(parameters)
         self.model.eval()
         loss_mse = 0
+
+        # Start timing the evaluation process
+        start_time = time.time()
+
+        # Encrypt the model for evaluation
+        crypten_model = cnn.from_pytorch(self.model, dummy_input=torch.empty((1, 10))).encrypt()
+
         print(f'Making predictions on {len(self.test_loader.dataset)} samples...')  # Debugging step
         with torch.no_grad():
-            for _, data in enumerate(self.test_loader):
-                data, target = data.to(self.device, non_blocking=True), data.y.view(-1, 1).float().to(self.device, non_blocking=True)
-                output = self.model(data)
-                loss_mse += F.mse_loss(output, target, reduction="sum")
+            for _, data in enumerate(tqdm(self.test_loader, desc=f"Client {self.id} Evaluating", unit="batch")):
+                data.x = crypten.cryptensor(data.x)  # Encrypt input data
+                data.y = crypten.cryptensor(data.y.view(-1, 1).float())  # Encrypt target data
+
+                output = crypten_model(data.x)
+                loss_mse += crypten.mse_loss(output, data.y, reduction="sum").get_plain_text()  # Get decrypted loss
+
+        # End timing the evaluation process
+        end_time = time.time()
+        total_time = end_time - start_time
+        print(f"Evaluation complete! MSE: {loss_mse:.6f} Time taken for evaluation: {total_time:.2f} seconds.")  # Debugging step
+
         loss = float(loss_mse / len(self.test_loader.dataset))
-        print(f"Evaluation complete, MSE: {loss}")  # Debugging step
         return loss, len(self.test_loader.dataset), {"mse": loss}
 
 
@@ -98,7 +134,7 @@ def main(args):
     print(f"Starting client with server address {args.server}")  # Debugging step
 
     # Start Flower client
-    client = FedDTIClient(model, train, test, args.partition).to_client()
+    client = FedDTIClient(model, train, test, args.partition)
     print("Starting Flower client connection...")  # Add before the start_client line
     fl.client.start_client(server_address=args.server, client=client)
     print("Client connection started...")  # Add right after to check if this is reached
@@ -107,7 +143,7 @@ def main(args):
 # Step 5: Timeouts and Client Connections
 start_time = time.time()
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Server Script")
+    parser = argparse.ArgumentParser(description="Client Script")
     parser.add_argument("--num-clients", default=2, type=int)
     parser.add_argument("--num-rounds", default=1, type=int)
     parser.add_argument("--early-stop", default=-1, type=int)
@@ -142,4 +178,7 @@ if __name__ == "__main__":
     NORMALISATION = args.normalisation
 
     main(args)
-print("--- %s seconds ---" % (time.time() - start_time))
+
+# Print the total execution time for the entire client process
+total_execution_time = time.time() - start_time
+print(f"Total execution time for client: {total_execution_time:.2f} seconds.")
