@@ -1,0 +1,30 @@
+[92mINFO [0m:      Starting Flower server, config: num_rounds=10, no round_timeout
+[92mINFO [0m:      Flower ECE: gRPC server running (10 rounds), SSL is disabled
+[92mINFO [0m:      [INIT]
+[92mINFO [0m:      Using initial global parameters provided by strategy
+[92mINFO [0m:      Starting evaluation of initial global parameters
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1728859447.048020 1802018 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+Pre-processed data found: data/processed/kiba_test.pt, loading ...
+Make prediction for 19709 samples...
+I0000 00:00:1728859447.098464 1801938 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+I0000 00:00:1728859447.111117 1801938 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+I0000 00:00:1728859447.144567 1801938 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+I0000 00:00:1728859447.176529 1801938 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+[92mINFO [0m:      initial parameters (loss, other metrics): 121.69712829589844, {'MSE': 121.69712829589844}
+[92mINFO [0m:      
+[92mINFO [0m:      [ROUND 1]
+[92mINFO [0m:      configure_fit: strategy sampled 4 clients (out of 4)
+[92mINFO [0m:      aggregate_fit: received 4 results and 0 failures
+[93mWARNING [0m:   No fit_metrics_aggregation_fn provided
+Make prediction for 19709 samples...
+I0000 00:00:1728860018.639670 1801938 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+I0000 00:00:1728860018.679162 1801938 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+I0000 00:00:1728860018.696882 1801938 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+I0000 00:00:1728860018.713407 1801938 fork_posix.cc:77] Other threads are currently calling into gRPC, skipping fork() handlers
+[92mINFO [0m:      fit progress: (1, 117.1273422241211, {'MSE': 117.1273422241211}, 571.5970231899992)
+[92mINFO [0m:      configure_evaluate: strategy sampled 4 clients (out of 4)
+[92mINFO [0m:      aggregate_evaluate: received 2 results and 2 failures
+[93mWARNING [0m:   No evaluate_metrics_aggregation_fn provided
+[92mINFO [0m:      
+[92mINFO [0m:      [ROUND 2]
