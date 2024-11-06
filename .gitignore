@@ -10,3 +10,5 @@ output_nonIID_fl_protein_8
 results_with_2_clients
 results_with_4_clients
 results_with_8_clients
+results_with_16_clients
+results_with_32_clients
